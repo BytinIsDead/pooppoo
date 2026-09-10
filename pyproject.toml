@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pooppoo"
+version = "0.1.0"
+description = "pooppoo browser - WebKit (no Gecko, no Blink), compiled via GitHub runner"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+  "requests>=2.31",
+  "beautifulsoup4>=4.12",
+]
+[project.scripts]
+pooppoo = "pooppoo.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,7 @@
+requests>=2.31
+beautifulsoup4>=4.12
+PyGObject>=3.44  # for WebKit2GTK (Linux)
+pycairo>=1.26
+# Windows fallback uses built-in tkinter, no extra deps
+# For building executables:
+pyinstaller>=6.0

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+*.spec.bak
+
+# PyInstaller
+*.manifest
+*.pyinstaller/
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Browser data
+history.db
+bookmarks.json
+downloads/
+user-data/
+
+# Editor
+.vscode/
+.idea/
+*.swp
