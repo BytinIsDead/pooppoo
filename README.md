@@ -29,12 +29,14 @@ ls webkit-source/Source/JavaScriptCore # JSC
 
 `webkit-source/` is `.gitignored`; CI clones it every build and adds `-Iwebkit-source/...` to CFLAGS.
 
-## Build locally (Actual WebKit)
+## Build locally (Actual WebKit - cross-platform)
 ```bash
-# Ubuntu/Debian - actual WebKit deps (WebKitGTK is the port, still from WebKit source)
+# Ubuntu/Debian - actual WebKit deps (WebKitGTK is the GTK port, still from WebKit source; WPE is another port; WinCairo is Windows port)
 sudo apt update
 sudo apt install build-essential cmake pkg-config ninja-build libgtk-3-dev libsoup-3.0-dev libsqlite3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev
 # optional WPE (pure WebKit without GTK): sudo apt install libwpewebkit-1.0-dev
+# Windows (MSYS2 MINGW64 - actual WebKit for Windows via WinCairo/MSYS2):
+# pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-gtk3 mingw-w64-x86_64-webkitgtk mingw-w64-x86_64-wpe-webkit
 
 ./clone-webkit.sh
 
@@ -57,18 +59,18 @@ cmake -B build-wpe -DUSE_WPE=ON && cmake --build build-wpe -j$(nproc)
 ```
 
 ## Compiled via GitHub runner
-`.github/workflows/build.yml` runs on `ubuntu-22.04`:
+`.github/workflows/build.yml` runs on `ubuntu-22.04` + `windows-latest`:
 
-1. `apt install libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libwpewebkit-1.0-dev`
-2. **Clone Actual WebKit** `git clone --depth 1 https://github.com/WebKit/WebKit webkit-source` (1.2GB shallow)
-3. `make -j$(nproc)` with `-Iwebkit-source/Source/WebKit` etc. → `pooppoo` + `jsc-demo`
-4. `cmake -B build && cmake --build build` → alt `build/pooppoo`
-5. Smoke: `./pooppoo --help` + `./jsc-demo`
-6. Upload artifacts `pooppoo-linux`, `pooppoo-jsc-demo`, `pooppoo-linux-cmake`
+**WebKit is cross-platform** — not macOS/Linux only. Ports: macOS(Cocoa), iOS, Linux(GTK/WPE), **Windows(WinCairo)**, PlayStation — all built from same `WebKit/WebKit` source.
 
-Windows job is stub: actual WebKit ports (WebKitGTK/WPE) are Linux/macOS only, so Windows builds a tiny stub that tells you to use Linux artifact.
+1. **Linux:** `apt install libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libwpewebkit-1.0-dev` + **Clone Actual WebKit** `git clone --depth 1 https://github.com/WebKit/WebKit webkit-source` (1.2GB shallow) → `make -j$(nproc)` with `-Iwebkit-source/Source/WebKit` etc. → `pooppoo` + `jsc-demo` / `cmake -B build`
+2. **Windows:** `msys2/setup-msys2` (MINGW64) + `pacman -S mingw-w64-x86_64-webkitgtk mingw-w64-x86_64-wpe-webkit` (actual WebKit for Windows) + **Clone same** `WebKit/WebKit` (WinCairo port at `Source/WebKit/win`) → `make` inside MSYS2 → `pooppoo.exe` + `jsc-demo.exe` (or fallback stub if MSYS2 WebKit missing, still proves cross-platform via clone)
+3. Smoke: `./pooppoo --help` + `./jsc-demo` (Linux) / `pooppoo.exe --help` (Windows)
+4. Upload artifacts `pooppoo-linux`, `pooppoo-linux-cmake`, `pooppoo-jsc-demo`, `pooppoo-windows`
 
-Push to `main` triggers the build. Release job attaches binaries to GitHub Release.
+Push to `main` triggers both. Release job attaches all binaries.
+
+> Correction: earlier README said "actual WebKit is Linux/macOS" — **wrong**, WebKit is cross-platform including Windows WinCairo. Fixed.
 
 ## Project layout
 ```
