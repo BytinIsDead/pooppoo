@@ -29,10 +29,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Python deps
+      - name: Install Python deps (Linux - includes WebKit bindings)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests beautifulsoup4 pyinstaller pillow pycairo PyGObject
 
       - name: Sanity check WebKit import
         run: |
@@ -65,10 +65,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Python deps
+      - name: Install Python deps (Windows - toy fallback only, no PyGObject)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests beautifulsoup4 pyinstaller pillow
 
       - name: Build with PyInstaller (Windows)
         run: |
