@@ -22,34 +22,29 @@ jobs:
           sudo apt-get install -y \
             python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
             gir1.2-webkit2-4.1 libwebkit2gtk-4.1-dev \
-            libcairo2-dev pkg-config libgirepository1.0-dev gobject-introspection
+            libcairo2-dev pkg-config libgirepository1.0-dev gobject-introspection \
+            python3-pip python3-pil
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Python deps (Linux - includes WebKit bindings)
+      - name: Install Python deps (Linux - system python, no hosted)
         run: |
-          python -m pip install --upgrade pip
-          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}"
-          pip install requests beautifulsoup4 pyinstaller pillow pycairo PyGObject
-        env:
-          PKG_CONFIG_PATH: "/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:/opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig"
+          python3 -m pip install --upgrade pip --break-system-packages
+          python3 -m pip install --break-system-packages requests beautifulsoup4 pyinstaller pillow
+          python3 -c "import gi; print('gi ok')"
+          pkg-config --modversion girepository-2.0 || (find /usr -name 'girepository*.pc' 2>/dev/null; echo 'no girepository pc found')
 
-      - name: Sanity check WebKit import
+      - name: Sanity check WebKit import (system python)
         run: |
-          PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH python -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1'); from gi.repository import WebKit2; print('WebKit2 OK:', WebKit2.MAJOR_VERSION)"
+          python3 -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1'); from gi.repository import WebKit2; print('WebKit2 OK:', WebKit2.MAJOR_VERSION)"
 
-      - name: Build with PyInstaller (Linux)
+      - name: Build with PyInstaller (Linux - system python)
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name pooppoo --hidden-import=gi --hidden-import=gi.repository.Gtk --hidden-import=gi.repository.WebKit2 --collect-all gi --add-data "assets:assets" src/pooppoo/__main__.py
+          python3 -m PyInstaller --noconfirm --onefile --windowed --name pooppoo --hidden-import=gi --hidden-import=gi.repository.Gtk --hidden-import=gi.repository.WebKit2 --collect-all gi --add-data "assets:assets" src/pooppoo/__main__.py
           ls -lh dist/
 
       - name: Smoke test (toy engine path ok)
         run: |
           ./dist/pooppoo --help || true
-          python src/pooppoo/__main__.py --help
+          python3 src/pooppoo/__main__.py --help
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
