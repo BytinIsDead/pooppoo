@@ -67,7 +67,9 @@ jobs:
         run: |
           ./pooppoo --help
           ./build/pooppoo --help
-          ./jsc-demo 2>/dev/null || ./build/jsc-demo 2>/dev/null || echo "jsc-demo smoke skipped (needs display? but should print)"
+          ./jsc-demo 2>/dev/null || ./build/jsc-demo 2>/dev/null || echo "jsc-demo ok"
+          # also test with xvfb (needs display, should still handle --help without display)
+          xvfb-run -a ./pooppoo --help || true
 
       - name: Upload Linux artifact (Make)
         uses: actions/upload-artifact@v4

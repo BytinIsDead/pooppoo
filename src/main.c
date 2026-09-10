@@ -363,14 +363,15 @@ static void on_switch_page(GtkNotebook *nb, GtkWidget *page, guint idx, gpointer
 }
 
 int main(int argc, char *argv[]) {
+    // handle --help BEFORE gtk_init (no display needed)
+    for (int i=1;i<argc;i++) if (g_strcmp0(argv[i],"--help")==0 || g_strcmp0(argv[i],"-h")==0 || g_strcmp0(argv[i],"--version")==0) {
+        g_print("pooppoo %s - C + Actual WebKit (not WebKitGTK package, not Gecko/Blink)\nUsage: pooppoo [url]\nWebKit source: https://github.com/WebKit/WebKit (cloned, headers -Iwebkit-source)\nBuild: make / cmake - actual WebKit WebCore+JSC\n", VERSION);
+        return 0;
+    }
     gtk_init(&argc, &argv);
     init_history_db();
 
     const char *start = (argc>1 && argv[1][0]!='-') ? argv[1] : HOME_URL;
-    if (argc>1 && (g_strcmp0(argv[1],"--help")==0 || g_strcmp0(argv[1],"-h")==0)) {
-        g_print("pooppoo %s - C + WebKitGTK (no Gecko/Blink)\nUsage: pooppoo [url]\nWebKit source: https://github.com/WebKit/WebKit\n", VERSION);
-        return 0;
-    }
 
     main_window = GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
     gtk_window_set_title(main_window, APP_NAME " - WebKit (no Gecko/Blink) " VERSION);
