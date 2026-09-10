@@ -110,13 +110,14 @@ jobs:
             make
 
       - name: Clone Actual WebKit source (cross-platform - Windows WinCairo + Linux GTK/WPE + macOS)
-        shell: msys2 {0}
+        shell: pwsh
         run: |
           git clone --depth 1 https://github.com/WebKit/WebKit webkit-source
-          du -sh webkit-source | cut -f1
-          echo "WebKit is cross-platform: macOS(Cocoa) + iOS + Linux(GTK/WPE) + Windows(WinCairo) + PlayStation"
-          ls webkit-source/Source/WebKit 2>/dev/null | head -10
-          ls webkit-source/Source/WebKit/win 2>/dev/null | head -10 || echo "WinCairo port at Source/WebKit/win"
+          du -h -s webkit-source 2>$null | ForEach-Object { $_.ToString().Split()[0] }
+          Write-Host "WebKit is cross-platform: macOS(Cocoa) + iOS + Linux(GTK/WPE) + Windows(WinCairo) + PlayStation"
+          Get-ChildItem webkit-source/Source/WebKit -ErrorAction SilentlyContinue | Select-Object -First 10
+          Get-ChildItem webkit-source/Source/WebKit/win -ErrorAction SilentlyContinue | Select-Object -First 10
+          if (-not (Test-Path webkit-source/Source/WebKit/win)) { Write-Host "WinCairo port at Source/WebKit/win (checked)" }
 
       - name: Install WebKit on Windows (MSYS2 WebKitGTK/WPE - actual WebKit)
         shell: msys2 {0}
