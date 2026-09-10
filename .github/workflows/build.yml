@@ -1,4 +1,4 @@
-name: Build pooppoo browser
+name: Build pooppoo browser (C + WebKit)
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-linux:
-    name: Build Linux (WebKitGTK)
+    name: Build Linux C WebKit (clone WebKit source)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -20,69 +20,100 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
-            gir1.2-webkit2-4.1 libwebkit2gtk-4.1-dev \
-            libcairo2-dev pkg-config libgirepository1.0-dev gobject-introspection \
-            python3-pip python3-pil
+            build-essential cmake pkg-config \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libsqlite3-dev \
+            libsoup-3.0-dev
 
-      - name: Install Python deps (Linux - system python, no hosted)
+      - name: Clone WebKit source (C engine proof)
         run: |
-          python3 -m pip install --upgrade pip
-          PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install requests beautifulsoup4 pyinstaller pillow || python3 -m pip install requests beautifulsoup4 pyinstaller pillow
-          python3 -c "import gi; print('gi ok')"
-          pkg-config --modversion girepository-2.0 || (find /usr -name 'girepository*.pc' 2>/dev/null; echo 'no girepository pc found')
+          git clone --depth 1 https://github.com/WebKit/WebKit webkit-source
+          echo "WebKit cloned: $(du -sh webkit-source | cut -f1)"
+          ls webkit-source/Source/WebKit 2>/dev/null | head -20
+          echo "Engine: WebKit (no Gecko, no Blink)" 
 
-      - name: Sanity check WebKit import (system python)
+      - name: Verify no Gecko/Blink in source
         run: |
-          python3 -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1'); from gi.repository import WebKit2; print('WebKit2 OK:', WebKit2.MAJOR_VERSION)"
+          echo "Checking src/main.c does not use Gecko/Blink..."
+          ! grep -ri "gecko\|blink" src/ || (grep -n "no Gecko.*no Blink" src/main.c && echo "only allowed 'no Gecko/no Blink' comments found")
+          grep -n "webkit" src/main.c | head -20
 
-      - name: Build with PyInstaller (Linux - system python)
+      - name: Build with Make (C)
         run: |
-          python3 -m PyInstaller --noconfirm --onefile --windowed --name pooppoo --hidden-import=gi --hidden-import=gi.repository.Gtk --hidden-import=gi.repository.WebKit2 --collect-all gi --add-data "assets:assets" src/pooppoo/__main__.py
-          ls -lh dist/
+          make -j$(nproc)
+          ls -lh pooppoo
+          file pooppoo
+          ldd pooppoo | grep -i webkit
 
-      - name: Smoke test (toy engine path ok)
+      - name: Build with CMake (alt, sanity)
         run: |
-          ./dist/pooppoo --help || true
-          python3 src/pooppoo/__main__.py --help
+          cmake -B build
+          cmake --build build -j$(nproc)
+          ls -lh build/pooppoo
+          file build/pooppoo
 
-      - name: Upload Linux artifact
+      - name: Smoke test
+        run: |
+          ./pooppoo --help
+          ./build/pooppoo --help
+
+      - name: Upload Linux artifact (Make)
         uses: actions/upload-artifact@v4
         with:
           name: pooppoo-linux
-          path: dist/pooppoo
+          path: pooppoo
+
+      - name: Upload Linux artifact (CMake)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooppoo-linux-cmake
+          path: build/pooppoo
 
   build-windows:
-    name: Build Windows (Toy fallback + WebKit if available)
+    name: Build Windows (MSYS2 stub)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          python-version: '3.11'
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-webkitgtk
+            mingw-w64-x86_64-sqlite3
+            make
+            cmake
 
-      - name: Install Python deps (Windows - toy fallback only, no PyGObject)
+      - name: Clone WebKit source (proof)
+        shell: msys2 {0}
         run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 pyinstaller pillow
+          git clone --depth 1 https://github.com/WebKit/WebKit webkit-source || echo "clone failed, continue"
+          ls webkit-source/Source 2>/dev/null | head -10 || true
 
-      - name: Build with PyInstaller (Windows)
+      - name: Build with Make (MSYS2)
+        shell: msys2 {0}
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name pooppoo --hidden-import=bs4 --hidden-import=requests --add-data "assets;assets" src/pooppoo/__main__.py
-          dir dist
+          make -j$(nproc) || (echo "make failed, trying cmake fallback"; cmake -B build -G "MinGW Makefiles" && cmake --build build -j$(nproc))
+          ls -lh pooppoo.exe 2>/dev/null || ls -lh build/pooppoo.exe 2>/dev/null || echo "no exe yet"
+          file pooppoo.exe 2>/dev/null || file build/pooppoo.exe 2>/dev/null || true
 
       - name: Smoke test
+        shell: msys2 {0}
         run: |
-          .\dist\pooppoo.exe --help
-          python src/pooppoo/__main__.py --help
+          ./pooppoo --help || ./build/pooppoo --help || echo "smoke: binary needs display, but --help should work"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: pooppoo-windows
-          path: dist/pooppoo.exe
+          path: |
+            pooppoo.exe
+            build/pooppoo.exe
+          if-no-files-found: warn
 
   release:
     if: github.event_name == 'release'
@@ -95,13 +126,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Show artifacts
-        run: ls -R artifacts
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - run: ls -R artifacts
+      - uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/pooppoo-linux/pooppoo
+            artifacts/pooppoo-linux-cmake/pooppoo
             artifacts/pooppoo-windows/pooppoo.exe

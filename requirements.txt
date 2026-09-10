@@ -1,6 +1,0 @@
-requests>=2.31
-beautifulsoup4>=4.12
-# PyGObject / pycairo are provided by system on Linux (python3-gi) via apt - DO NOT pip install (needs girepository-2.0)
-# Windows fallback uses built-in tkinter, no extra deps
-pyinstaller>=6.0
-pillow>=10.0

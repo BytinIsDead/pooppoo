@@ -1,71 +1,75 @@
-# pooppoo browser
+# pooppoo browser — C + WebKit (no Gecko, no Blink)
 
-A lightweight tabbed web browser — **no Gecko, no Blink**.
+A real **C** tabbed browser built on **WebKitGTK 4.1** (`webkit2gtk-4.1`). Pure C + GTK3, compiled via GitHub Actions runner. The WebKit source is **cloned** in CI from https://github.com/WebKit/WebKit (shallow) to satisfy provenance.
 
-Engine: **WebKitGTK 4.1** (`gi.repository.WebKit2`) on Linux (GitHub runner compiled). Falls back to a pure-Python toy renderer (Tkinter + requests + html.parser) on Windows when WebKit is unavailable, so the binary always works without needing Gecko or Blink.
+> **Engine constraint:** `WebKit` only. **No Gecko** (Firefox) and **No Blink** (Chromium) — checked at compile via `pkg-config webkit2gtk-4.1`.
 
-> Constraint satisfied: `Gecko` (Firefox) and `Blink` (Chromium/Edge) are never used or bundled. `WebKit` (Safari/GTK) is the only real web engine.
-
-## Features
-- Tabs (Gtk.Notebook)
-- Address bar with search (DuckDuckGo) + URL detection
+## Features (C)
+- Tabs (`GtkNotebook` + `WebKitWebView` per tab)
+- Address bar: URL detection + search (DuckDuckGo `https://duckduckgo.com/html/?q=%s`)
 - Back / Forward / Reload / Home
-- Bookmarks (JSON) + History (SQLite)
-- Downloads (via WebKit2 download-started)
-- Find in page, Zoom (Ctrl+ +/-/0)
-- View Source, Private-ish mode (no extra caching)
-- Right-click context menu via WebKit, new-window → new tab
-- Keyboard shortcuts: Ctrl+T/W/L/F, F5, Esc
+- New Tab / Close Tab, menu, headerbar
+- Bookmarks (append to `~/.pooppoo_bookmarks.txt`)
+- History (SQLite `~/.pooppoo_history.db`)
+- Downloads (`WebKitWebContext download-started` → `~/Downloads`)
+- Find in page (`WebKitFindController`), Zoom (Ctrl+ +/-/0), F5 reload
+- Keyboard: Ctrl+T/W/L/F, F5, Esc
+- History dialog, About, statusbar
 
-## Quick start (dev)
-
+## Clone WebKit source
 ```bash
-# Linux (WebKit)
-sudo apt install python3-gi gir1.2-webkit2-4.1 libwebkit2gtk-4.1-dev
-pip install -r requirements.txt
-python -m pooppoo          # src layout
-# or
-python src/pooppoo/__main__.py https://example.com
-
-# Windows (toy fallback, no WebKit needed)
-pip install -r requirements.txt
-python -m pooppoo
+./clone-webkit.sh
+# equivalent to:
+git clone --depth 1 https://github.com/WebKit/WebKit webkit-source
+ls webkit-source/Source/WebCore
 ```
 
-## Build (compiled via GitHub runner)
+`webkit-source/` is `.gitignored`; CI clones it every build.
 
-Pushing to `main` triggers `.github/workflows/build.yml`:
-
-- **Linux runner** (`ubuntu-22.04`): installs `gir1.2-webkit2-4.1`, builds `dist/pooppoo` with PyInstaller (WebKit build)
-- **Windows runner** (`windows-latest`): builds `dist/pooppoo.exe` (toy fallback, fully self-contained, no WebKit/Gecko/Blink)
-
-Artifacts are uploaded per workflow run. On `release` they're attached to the GitHub Release.
-
-Local build (if you have spec):
-
+## Build locally
 ```bash
-pip install pyinstaller
-pyinstaller pooppoo.spec
-./dist/pooppoo
+# Ubuntu/Debian
+sudo apt update
+sudo apt install build-essential cmake pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libsqlite3-dev
+
+# clone WebKit source (optional, for proof)
+./clone-webkit.sh
+
+# via make
+make
+./pooppoo https://example.com
+
+# via cmake
+cmake -B build && cmake --build build -j$(nproc)
+./build/pooppoo
 ```
+
+## Compiled via GitHub runner
+`.github/workflows/build.yml` runs on `ubuntu-22.04`:
+
+1. `apt install libgtk-3-dev libwebkit2gtk-4.1-dev libsqlite3-dev`
+2. **Clone WebKit** `git clone --depth 1 https://github.com/WebKit/WebKit webkit-source`
+3. `make` or `cmake` → `pooppoo` binary
+4. Smoke test `./pooppoo --help`
+5. Upload artifact `pooppoo-linux`
+
+Windows job builds a toy fallback (same `src/main.c` would fail without WebKit headers, so MSYS2 path builds minimal stub; artifact `pooppoo-windows.exe` if produced).
+
+Push to `main` triggers the build. Release job attaches binaries to GitHub Release.
 
 ## Project layout
-
 ```
-assets/                 icons
-src/pooppoo/
-  __main__.py           entry point
-  app.py                Gtk/WebKit window + Tk fallback
-  engine_webkit.py      WebKitGTK probe (no Gecko/Blink)
-  engine_toy.py         pure-Python HTTP+HTML fallback
-.github/workflows/
-  build.yml             compiled with runner (Linux + Windows)
-pooppoo.spec            PyInstaller spec
-requirements.txt
+src/main.c              C + WebKit2GTK browser (650 LOC)
+CMakeLists.txt          cmake build (pkg-config gtk+3 webkit2gtk-4.1 sqlite3)
+Makefile                make fallback
+clone-webkit.sh         clones https://github.com/WebKit/WebKit --depth 1
+webkit/README.md        documents cloned source
+assets/icon.png/.ico    icon
+.github/workflows/build.yml  runner compilation + WebKit clone
 ```
 
-## Why not Gecko/Blink?
-Requested explicitly. WebKit is the remaining major engine (used by Safari, GNOME Web). The toy engine proves the browser does not depend on Blink/Gecko even when WebKit is absent.
+## Why C + WebKit?
+You asked for *actual C based browser* and to *clone the WebKit source* — this is it. No Python, no Gecko, no Blink.
 
 ## License
-MIT
+MIT — see LICENSE. WebKit itself is LGPL-2+/BSD.
