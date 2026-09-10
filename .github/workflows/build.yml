@@ -32,11 +32,14 @@ jobs:
       - name: Install Python deps (Linux - includes WebKit bindings)
         run: |
           python -m pip install --upgrade pip
+          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:${PKG_CONFIG_PATH}"
           pip install requests beautifulsoup4 pyinstaller pillow pycairo PyGObject
+        env:
+          PKG_CONFIG_PATH: "/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:/opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig"
 
       - name: Sanity check WebKit import
         run: |
-          python -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1'); from gi.repository import WebKit2; print('WebKit2 OK:', WebKit2.MAJOR_VERSION)"
+          PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH python -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1'); from gi.repository import WebKit2; print('WebKit2 OK:', WebKit2.MAJOR_VERSION)"
 
       - name: Build with PyInstaller (Linux)
         run: |
