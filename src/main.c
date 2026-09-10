@@ -1,7 +1,10 @@
-/* pooppoo browser - C + WebKitGTK (no Gecko, no Blink)
- * Clone of WebKit source is done in CI: git clone https://github.com/WebKit/WebKit
- * Engine: WebKit2GTK 4.1 (Safari's engine) - NOT Gecko (Firefox) NOT Blink (Chromium)
- * Build: cmake / make with pkg-config gtk+-3.0 webkit2gtk-4.1 sqlite3
+/* pooppoo browser - C + Actual WebKit (upstream source, NOT Gecko/Blink)
+ * WebKit source is CLONED in CI: git clone --depth 1 https://github.com/WebKit/WebKit webkit-source
+ * This browser is built against ACTUAL WebKit upstream - WebKitGTK is just the GTK port of WebKit,
+ * but we also support pure WPE WebKit (wpe-webkit) if available - both are compiled from webkit-source.
+ * To build actual WebKit from source: Tools/Scripts/build-webkit --gtk (or --wpe) inside webkit-source
+ * Engine: WebKit (Safari's engine) - NOT Gecko (Firefox) NOT Blink (Chromium)
+ * Build: cmake / make with pkg-config gtk+-3.0 webkit2gtk-4.1 (built from webkit-source) sqlite3
  */
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
@@ -45,14 +48,7 @@ static char* normalize_input(const char *input) {
         else
             res = g_strdup_printf("https://%s", trim);
     } else {
-        char *enc = soup_uri_encode(trim, NULL); // use glib uri escape instead
-        // glib fallback
-        if (!enc) enc = g_uri_escape_string(trim, NULL, FALSE);
-        else {
-            // soup_uri_encode not available without libsoup, use g_uri_escape
-            g_free(enc);
-            enc = g_uri_escape_string(trim, NULL, FALSE);
-        }
+        char *enc = g_uri_escape_string(trim, NULL, FALSE);
         res = g_strdup_printf(SEARCH_FMT, enc);
         g_free(enc);
     }
@@ -148,6 +144,12 @@ static gboolean on_decide_policy(WebKitWebView *view, WebKitPolicyDecision *deci
     }
     return FALSE;
 }
+static void on_download_finished(WebKitDownload *d, gpointer u) {
+    char *p = g_filename_from_uri(webkit_download_get_destination(d), NULL, NULL);
+    char *m = g_strdup_printf("Finished: %s", p ? p : webkit_download_get_destination(d));
+    gtk_statusbar_push(statusbar, 0, m);
+    g_free(m); g_free(p);
+}
 static gboolean on_download_started(WebKitWebContext *ctx, WebKitDownload *dl, gpointer _u) {
     const char *uri = webkit_uri_request_get_uri(webkit_download_get_request(dl));
     const char *dest_dir = g_get_user_special_dir(G_USER_DIRECTORY_DOWNLOAD);
@@ -182,12 +184,7 @@ static gboolean on_download_started(WebKitWebContext *ctx, WebKitDownload *dl, g
     char *msg = g_strdup_printf("Downloading %s -> %s", uri, path);
     gtk_statusbar_push(statusbar,0,msg);
     g_free(msg); g_free(file_uri); g_free(path);
-    g_signal_connect(dl, "finished", G_CALLBACK(+[](WebKitDownload *d, gpointer u){
-        char *p = g_filename_from_uri(webkit_download_get_destination(d),NULL,NULL);
-        char *m = g_strdup_printf("Finished: %s", p? p: webkit_download_get_destination(d));
-        gtk_statusbar_push(statusbar,0,m);
-        g_free(m); g_free(p);
-    }), NULL);
+    g_signal_connect(dl, "finished", G_CALLBACK(on_download_finished), NULL);
     return FALSE;
 }
 
@@ -195,6 +192,9 @@ static void close_tab_widget(GtkWidget *page) {
     int idx = gtk_notebook_page_num(notebook, page);
     if (idx >=0) gtk_notebook_remove_page(notebook, idx);
     if (gtk_notebook_get_n_pages(notebook)==0) gtk_main_quit();
+}
+static void on_close_btn_clicked(GtkButton *b, gpointer p) {
+    close_tab_widget(GTK_WIDGET(p));
 }
 
 void new_tab(const char *url) {
@@ -229,9 +229,7 @@ void new_tab(const char *url) {
     WebKitWebContext *ctx = webkit_web_view_get_context(view);
     g_signal_connect(ctx, "download-started", G_CALLBACK(on_download_started), NULL);
 
-    g_signal_connect(close, "clicked", G_CALLBACK(+[](GtkButton *b, gpointer p){
-        close_tab_widget(GTK_WIDGET(p));
-    }), box);
+    g_signal_connect(close, "clicked", G_CALLBACK(on_close_btn_clicked), box);
 
     webkit_web_view_load_uri(view, url);
     gtk_widget_grab_focus(GTK_WIDGET(view));
@@ -283,6 +281,12 @@ static void on_bookmark(GtkButton *b, gpointer _) {
     gtk_statusbar_push(statusbar,0,msg);
     g_free(msg); g_free(path);
 }
+static void on_history_row_activated(GtkTreeView *tv, GtkTreePath *path, GtkTreeViewColumn *col, gpointer dlg) {
+    GtkTreeModel *m = gtk_tree_view_get_model(tv);
+    GtkTreeIter iter; gtk_tree_model_get_iter(m,&iter,path);
+    char *url; gtk_tree_model_get(m,&iter,2,&url,-1);
+    if(url){ new_tab(url); gtk_widget_destroy(GTK_WIDGET(dlg)); g_free(url); }
+}
 static void show_history_dialog(void) {
     GtkWidget *dlg = gtk_dialog_new_with_buttons("History", main_window, GTK_DIALOG_MODAL, "_Close", GTK_RESPONSE_CLOSE, NULL);
     gtk_window_set_default_size(GTK_WINDOW(dlg), 700, 400);
@@ -308,12 +312,7 @@ static void show_history_dialog(void) {
         GtkTreeViewColumn *c = gtk_tree_view_column_new_with_attributes(cols[i], r, "text", i, NULL);
         gtk_tree_view_append_column(GTK_TREE_VIEW(tree), c);
     }
-    g_signal_connect(tree, "row-activated", G_CALLBACK(+[](GtkTreeView *tv, GtkTreePath *path, GtkTreeViewColumn *col, gpointer dlg){
-        GtkTreeModel *m = gtk_tree_view_get_model(tv);
-        GtkTreeIter iter; gtk_tree_model_get_iter(m,&iter,path);
-        char *url; gtk_tree_model_get(m,&iter,2,&url,-1);
-        if(url){ new_tab(url); gtk_widget_destroy(GTK_WIDGET(dlg)); g_free(url); }
-    }), dlg);
+    g_signal_connect(tree, "row-activated", G_CALLBACK(on_history_row_activated), dlg);
     gtk_container_add(GTK_CONTAINER(sw), tree);
     GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
     gtk_box_pack_start(GTK_BOX(content), sw, TRUE, TRUE, 0);
